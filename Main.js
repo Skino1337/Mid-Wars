@@ -3,10 +3,11 @@ game.hook("OnMapStart", onMapStart);
 
 //console.addClientCommand("pos", pos);
 
-var init;
+var init, msgPrinted;
 var changeRespawnTime = [];
 var radiCour = [], direCour = [];
-
+var playerManager;
+ 
 function onGameFrame()
 {
 	if (!init)
@@ -16,6 +17,13 @@ function onGameFrame()
 		console.findConVar("dota_easy_mode").setInt(1);
 			
 		init = true;
+	}
+	
+	if (!msgPrinted && game.rules.props.m_nGameState == dota.STATE_GAME_IN_PROGRESS)
+	{
+		printToAll("[MW] Mid Wars by Skino.");
+		
+		msgPrinted = true;
 	}
 	
 	var clients = getConnectedPlayingClients();
@@ -32,7 +40,12 @@ function onGameFrame()
 		{
 			if (!changeRespawnTime[playerId])
 			{
-				hero.netprops.m_flRespawnTime *= 0.15;
+				resptime = hero.netprops.m_flRespawnTime;
+				deadtime = game.rules.props.m_fGameTime;
+				time = (resptime - deadtime) * 0.15;
+				
+				hero.netprops.m_flRespawnTime = deadtime + time;
+				
 				changeRespawnTime[playerId] = true;
 			}
 		}
@@ -45,39 +58,53 @@ function onGameFrame()
 		if (!radiCour["Give"] && team == dota.TEAM_RADIANT)
 		{
 			radiCour["Item"] = dota.giveItemToHero("item_courier", hero);
-			radiCour["Hero"] = hero; radiCour["PlayerID"] = playerId; radiCour["Give"] = true; radiCour["Use"] = false;
+			radiCour["Hero"] = hero;
+			radiCour["PlayerID"] = playerId;
+			radiCour["Give"] = true;
+			radiCour["Use"] = false;
 			dota.giveItemToHero("item_flying_courier", hero);
 		}
 		if (!direCour["Give"] && team == dota.TEAM_DIRE)
 		{
 			direCour["Item"] = dota.giveItemToHero("item_courier", hero);
-			direCour["Hero"] = hero; direCour["PlayerID"] = playerId; direCour["Give"] = true; direCour["Use"] = false;
+			direCour["Hero"] = hero;
+			direCour["PlayerID"] = playerId;
+			direCour["Give"] = true;
+			direCour["Use"] = false;
 			dota.giveItemToHero("item_flying_courier", hero);
 		}
 	}
 	
-	if (radiCour["Use"] && !radiCour["Use"])
+	if (!radiCour["Use"] || !direCour["Use"])
 	{
-		if (!radiCour["Item"])
-			radiCour["Use"] = true;
-		else
-			dota.executeOrders(radiCour["PlayerID"], dota.ORDER_TYPE_CAST_ABILITY_NO_TARGET, [radiCour["Hero"]], null, radiCour["Item"], false, 0, 0, 0);
+		var couriers = game.findEntitiesByClassname("npc_dota_courier");
+		for (var i in couriers)
+		{
+			var cour = couriers[i];
+			var team = cour.netprops.m_iTeamNum;
+			
+			if (team = dota.TEAM_RADIANT)
+				radiCour["Use"] = true;
+				
+			if (team = dota.TEAM_DIRE)
+				direCour["Use"] = true;
+		}
 	}
 	
+	if (radiCour["Give"] && !radiCour["Use"])
+		dota.executeOrders(radiCour["PlayerID"], dota.ORDER_TYPE_CAST_ABILITY_NO_TARGET, [radiCour["Hero"]], null, radiCour["Item"], false, 0, 0, 0);
+	
 	if (direCour["Give"] && !direCour["Use"])
-	{
-		if (!direCour["Item"])
-			direCour["Use"] = true;
-		else
-			dota.executeOrders(direCour["PlayerID"], dota.ORDER_TYPE_CAST_ABILITY_NO_TARGET, [direCour["Hero"]], null, direCour["Item"], false, 0, 0, 0);
-	}
+		dota.executeOrders(direCour["PlayerID"], dota.ORDER_TYPE_CAST_ABILITY_NO_TARGET, [direCour["Hero"]], null, direCour["Item"], false, 0, 0, 0);
 }
 
 function onMapStart() 
 {
-	dota.removeAll("npc_dota_barracks*");
-	dota.removeAll("npc_dota_building*");
-	dota.removeAll("npc_dota_neutral_spawner*");
+	playerManager = game.findEntityByClassname(-1, "dota_player_manager");
+	
+	dota.removeAll("npc_dota_barracks");
+	dota.removeAll("npc_dota_building");
+	dota.removeAll("npc_dota_neutral_spawner");
 	
 	for (var i in removeTargetName)
 	{
@@ -87,11 +114,11 @@ function onMapStart()
 	
 	for(var i = 0; i < 4; i++)
 	{
+		createUnit("dota_goodguys_fillers", dota.TEAM_RADIANT, -6910 + i * 200, -3050, 256, true);
+		createUnit("dota_goodguys_fillers", dota.TEAM_RADIANT, -3600, -6400 + i * 200, 256, true);
+		
 		createUnit("dota_goodguys_fillers", dota.TEAM_DIRE, 3200, 6050 - i * 200, 256, true);
 		createUnit("dota_goodguys_fillers", dota.TEAM_DIRE, 6000 + i * 200, 2650, 256, true);
-		
-		createUnit("dota_goodguys_fillers", dota.TEAM_RADIANT, -6880 + i * 200, -3050, 256, true);
-		createUnit("dota_goodguys_fillers", dota.TEAM_RADIANT, -3600, -6400 + i * 200, 256, true);
 	}
 }
 
@@ -100,10 +127,24 @@ function pos(client, args)
 {
 	var hero = client.netprops.m_hAssignedHero;
 	var playerId = client.netprops.m_iPlayerID;
-	x = hero.netprops.m_vecOrigin.x + 300;
+	//client.printToChat("pos msg");
+	
+	/*
+	x = hero.netprops.m_vecOrigin.x;
 	y = hero.netprops.m_vecOrigin.y;
 	z = hero.netprops.m_vecOrigin.z;
 	client.printToChat(x + " " + y + " " + z);
+	*/
+	//if (!playerManager)
+	//	client.printToChat("playerManager err");
+		
+	//var gold = playerManager.netprops.m_iReliableGold[5];
+	//var r = getPlayerResource(playerId, "m_iReliableGold");
+	//client.printToChat("gold " + gold);
+	//client.printToChat("gold2 " + r);
+	
+	//var lbbt = playerManager.netprops.m_iLastBuybackTime[playerId];
+	//client.printToChat("lbbt " + lbbt);
 }
 
 function createUnit(className, team, x, y, z, exact)
